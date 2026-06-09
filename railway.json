@@ -3,10 +3,17 @@
   "description": "CPM2 Account & Garage Management Telegram Bot",
   "logo": "https://cdn-icons-png.flaticon.com/512/220/220236.png",
   "keywords": ["telegram", "bot", "shop", "cpm2"],
+  "buildpacks": [
+    "https://buildpacks.io/buildpacks/google/python"
+  ],
   "env": {
     "API_TOKEN": {
       "description": "Telegram Bot API Token from @BotFather",
       "required": true
+    },
+    "MISE_PYTHON_GITHUB_ATTESTATIONS": {
+      "description": "Disable Python GitHub attestation verification",
+      "value": "false"
     }
   }
 }
