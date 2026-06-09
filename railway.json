@@ -3,16 +3,57 @@
   "description": "CPM2 Account & Garage Management Telegram Bot",
   "logo": "https://cdn-icons-png.flaticon.com/512/220/220236.png",
   "keywords": ["telegram", "bot", "shop", "cpm2"],
-  "buildpacks": [
-    "https://buildpacks.io/buildpacks/google/python"
-  ],
   "env": {
     "API_TOKEN": {
       "description": "Telegram Bot API Token from @BotFather",
       "required": true
     },
+    "OWNER_ID": {
+      "description": "Owner ID",
+      "value": "6531314640"
+    },
+    "EXTRA_ADMIN": {
+      "description": "Extra Admin ID",
+      "value": "8650959684"
+    },
+    "STARS_CHANNEL_ID": {
+      "description": "Stars Channel ID",
+      "value": "-1003846885691"
+    },
+    "LOGS_GROUP_ID": {
+      "description": "Logs Group ID",
+      "value": "-1003957577057"
+    },
+    "GARAGE_LOGS_GROUP_ID": {
+      "description": "Garage Logs Group ID",
+      "value": "-1003957577057"
+    },
+    "PAYPAL_EMAIL_1": {
+      "description": "PayPal Email 1",
+      "value": "markryanmanoguid867@gmail.com"
+    },
+    "PAYPAL_EMAIL_2": {
+      "description": "PayPal Email 2",
+      "value": "tnremail@gmail.com"
+    },
+    "PAYMAYA_NAME": {
+      "description": "PayMaya Name",
+      "value": "MARKRYAN MANOGUID"
+    },
+    "PAYMAYA_NUM": {
+      "description": "PayMaya Number",
+      "value": "09281630511"
+    },
+    "DATABASE_URL": {
+      "description": "Database URL",
+      "value": "sqlite:///tnnr_shop.db"
+    },
     "MISE_PYTHON_GITHUB_ATTESTATIONS": {
       "description": "Disable Python GitHub attestation verification",
+      "value": "false"
+    },
+    "PYTHON_GITHUB_ATTESTATIONS": {
+      "description": "Disable Python GitHub attestation verification (alternative)",
       "value": "false"
     }
   }
