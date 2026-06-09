@@ -1,5 +1,2 @@
 [tools]
 python = "3.11.7"
-
-[env]
-_.python.github_attestations = false
