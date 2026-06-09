@@ -1,0 +1,12 @@
+{
+  "name": "TNNR Shop Bot",
+  "description": "CPM2 Account & Garage Management Telegram Bot",
+  "logo": "https://cdn-icons-png.flaticon.com/512/220/220236.png",
+  "keywords": ["telegram", "bot", "shop", "cpm2"],
+  "env": {
+    "API_TOKEN": {
+      "description": "Telegram Bot API Token from @BotFather",
+      "required": true
+    }
+  }
+}
