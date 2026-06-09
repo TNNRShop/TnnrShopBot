@@ -1,0 +1,10 @@
+[build]
+nixPackages = ["python311"]
+pythonVersion = "3.11"
+
+[buildpacks]
+providers = ["python"]
+
+[env]
+MISE_PYTHON_GITHUB_ATTESTATIONS = "false"
+PYTHONUNBUFFERED = "1"
