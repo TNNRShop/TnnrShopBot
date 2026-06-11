@@ -1242,12 +1242,19 @@ def validate_stars_stock(pre_checkout_query):
 def handle_stars_success_payment(message):
     payment_info = message.successful_payment
     payload = payment_info.invoice_payload
+    buyer_id = message.from_user.id
+    buyer_uname = message.from_user.username or "Anonymous"
+
+    now = datetime.now()
+    d_str = now.strftime('%m/%d/%Y')
+    t_str = now.strftime('%I:%M %p')
     
+    # ----------------------------------------------------------------
+    # CASE A: TNNR GARAGE (CAR STARS WORKFLOW)
+    # ----------------------------------------------------------------
     if payload.startswith("carstars:"):
         parts = payload.split(":")
         car_id = int(parts[1])
-        buyer_id = int(parts[2])
-        buyer_uname = message.from_user.username or "Anonymous"
 
         conn = sqlite3.connect('tnnr_shop.db')
         cursor = conn.cursor()
@@ -1263,11 +1270,8 @@ def handle_stars_success_payment(message):
         owner = car[1] if car else "@JustTnnr"
         photo_file_id = car[2] if car else ""
 
-        now = datetime.now()
-        d_str = now.strftime('%m/%d/%Y')
-        t_str = now.strftime('%I:%M %p')
-
         log_channel_text = (
+            f"⚠️ [STARS TRANSACTION LOG]\n"
             f"📅 DATE OF PURCHASE: {d_str}\n"
             f"🕒 TIME OF PURCHASE: {t_str}\n"
             f"👤 BUYER USERNAME: @{buyer_uname}\n"
@@ -1275,29 +1279,47 @@ def handle_stars_success_payment(message):
             f"📦 PRODUCT: 1 Car ({brand})\n"
             f"💳 PAYMENT METHOD: {payment_info.total_amount} TELEGRAM STARS"
         )
-        bot.send_message(STARS_CHANNEL_ID, log_channel_text)
+        
+        try:
+            bot.send_message(STARS_CHANNEL_ID, log_channel_text)
+        except Exception as e:
+            print(f"Stars Channel Log Error: {e}")
 
         order_id, d, t = create_pending_order(buyer_id, buyer_uname, f"CAR: {brand} ({owner})", 1, "TELEGRAM STARS", f"⭐️ {payment_info.total_amount}")
         
-        # --- FIXED ADMIN PHOTO RECEIPT DISPLAY FOR STARS ---
-        headline = f"🧾 **[PAYMENT PROOF RECEIPT]** for Order #{order_id}\nBuyer: @{buyer_uname}"
-        if photo_file_id and "," in photo_file_id:
-            p_ids = photo_file_id.split(",")
-            mg = [types.InputMediaPhoto(pid, caption=headline if i==0 else "", parse_mode="Markdown") for i, pid in enumerate(p_ids)]
-            bot.send_media_group(GARAGE_LOGS_GROUP_ID, mg)
-        elif photo_file_id:
-            bot.send_photo(GARAGE_LOGS_GROUP_ID, photo_file_id, caption=headline, parse_mode="Markdown")
+        # SAFE PHOTO AUDIT LOG FOR ADMINS (Anti-Crash wrapped)
+        try:
+            headline = f"🧾 **[PAYMENT PROOF RECEIPT]** for Order #{order_id}\nBuyer: @{buyer_uname}"
+            if photo_file_id and "," in photo_file_id:
+                p_ids = photo_file_id.split(",")
+                mg = [types.InputMediaPhoto(pid, caption=headline if i==0 else "", parse_mode="Markdown") for i, pid in enumerate(p_ids)]
+                bot.send_media_group(GARAGE_LOGS_GROUP_ID, mg)
+            elif photo_file_id:
+                bot.send_photo(GARAGE_LOGS_GROUP_ID, photo_file_id, caption=headline, parse_mode="Markdown")
+        except Exception as img_err:
+            bot.send_message(GARAGE_LOGS_GROUP_ID, f"🧾 **[PAYMENT PROOF RECEIPT]** for Order #{order_id} (Image skipped due to API formats)\nBuyer: @{buyer_uname}")
+            print(f"Skipped photo log rendering failure safely: {img_err}")
             
-        bot.send_message(LOGS_GROUP_ID, log_channel_text, reply_markup=admin_order_keyboard(order_id))
+        try:
+            bot.send_message(LOGS_GROUP_ID, log_channel_text, reply_markup=admin_order_keyboard(order_id))
+        except Exception as e:
+            print(f"Logs Group Notification Error: {e}")
 
         deliv_msg = (
-            "‼️ Screenshot this and send it to the owner to claim your car purchase! ‼️\n"
-            "🎁 This will serve as the receipt for your purchase. 👛💸\n"
-            "Status: ✅ COMPLETED"
+            "Maraming salamat bro! Heto ang resibo mo:\n\n"
+            f"📦 Order ID: #{order_id}\n"
+            f"🚘 Kotse: {brand}\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "‼️ i-Screenshot ito at i-send sa owner para makuha mo ang iyong car purchase! ‼️\n"
+            "🎁 Gagamitin itong katibayan para mai-transfer sayo ang account.\n\n"
+            "Status: ✅ COMPLETED (Paid via Stars)"
         )
         bot.send_message(buyer_id, deliv_msg)
         return
 
+    # ----------------------------------------------------------------
+    # CASE B: SHOP REGULAR / VIP / COINFARM ACCOUNTS
+    # ----------------------------------------------------------------
     if not payload.startswith("stars_buy:"):
         return
 
@@ -1305,12 +1327,6 @@ def handle_stars_success_payment(message):
     prod = parts[1]
     val = parts[2]
     qty = int(parts[3])
-    buyer_id = int(parts[4])
-    buyer_uname = message.from_user.username or "Anonymous"
-
-    now = datetime.now()
-    d_str = now.strftime('%m/%d/%Y')
-    t_str = now.strftime('%I:%M %p')
 
     log_channel_text = (
         f"📅 DATE OF PURCHASE: {d_str}\n"
@@ -1319,9 +1335,13 @@ def handle_stars_success_payment(message):
         f"🆔 BUYER ID: {buyer_id}\n"
         f"📦 PRODUCT: {qty}x {prod.upper()} ({val})\n"
         f"💳 PAYMENT METHOD: {payment_info.total_amount} TELEGRAM STARS\n"
-        f"STATUS: ✅ DELIVERED"
+        f"STATUS: Processing..."
     )
-    bot.send_message(STARS_CHANNEL_ID, log_channel_text)
+    
+    try:
+        bot.send_message(STARS_CHANNEL_ID, log_channel_text)
+    except Exception as e:
+        print(f"Stars Channel Shop Log Error: {e}")
 
     if prod in ["regular", "vip"]:
         p_name = "REGULAR CARS" if prod == "regular" else "VIP ACCOUNTS"
@@ -1330,33 +1350,51 @@ def handle_stars_success_payment(message):
         if res:
             formatted_accs = "\n".join(res)
             deliv_msg = (
-                "✅ ORDER CONFIRMED & DELIVERED\n"
+                "✅ ORDER CONFIRMED & DELIVERED\n\n"
                 f"Product: {p_name}\n"
-                f"Quantity: {qty}\n\n"
-                f"Account Details:\n{formatted_accs}\n\n"
+                f"Quantity: {qty}\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Account Details (email:password):\n\n{formatted_accs}\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
                 "Status: ✅ COMPLETED\n\n"
-                "Thank you for your purchase!\n💯 TRUSTED"
+                "Thank you for your purchase bro bro! 💯 TRUSTED"
             )
             bot.send_message(buyer_id, deliv_msg)
         else:
-            bot.send_message(buyer_id, "❌ Auto allocation failed, but Stars were successfully received. Please contact admin support.")
+            # BACKUP WORKFLOW IF SYSTEM WAS RE-ALLOCATED LACKING ENOUGH RECORDS
+            order_id, _, _ = create_pending_order(buyer_id, buyer_uname, f"MANUAL SETUP: {p_name}", qty, "TELEGRAM STARS", f"⭐ {payment_info.total_amount}", "STARS_OUT_OF_STOCK")
+            
+            error_delivery_msg = (
+                "⚠️ **NOTICE TO BUYER** ⚠️\n\n"
+                "Salamat sa pagbabayad gamit ang Stars bro! "
+                "Napansin ng system na kasalukuyang naubusan ng automated stock ang aming database.\n\n"
+                f"Huwag mag-alala, pumasok ang bayad mo at nag-generate kami ng **Order ID: #{order_id}**.\n"
+                "I-send lamang ang screenshot na ito kay @JustTnnr para manu-mano niyang maibigay ang iyong account! Pasensya na sa abala, bro!"
+            )
+            bot.send_message(buyer_id, error_delivery_msg)
+            
+            bot.send_message(LOGS_GROUP_ID, f"🚨 **CRITICAL CRASH PREVENTED:** Nagbayad si @{buyer_uname} ng Stars para sa {p_name} pero **OUT OF STOCK** ang DB! Manual delivery needed for Order #{order_id}.", reply_markup=admin_order_keyboard(order_id))
             
     else:
         p_name = "DAILY COINFARM" if prod == "coinfarm" else "CHANGE EMAIL & PASSWORD"
-        create_pending_order(buyer_id, buyer_uname, f"{p_name} {val.upper()}", 1, "TELEGRAM STARS", f"⭐ {payment_info.total_amount}")
+        order_id, _, _ = create_pending_order(buyer_id, buyer_uname, f"{p_name} {val.upper()}", 1, "TELEGRAM STARS", f"⭐ {payment_info.total_amount}")
         
         cf_msg = (
-            "✅ ORDER CONFIRMED\n"
+            "✅ ORDER CONFIRMED\n\n"
             f"Product: {p_name}\n"
-            f"Plan: {val.upper()} PLAN\n\n"
-            "‼️ Screenshot this and send it to @JustTnnr ‼️\n"
-            "🎁 Your system activation token is being processed.\n"
+            f"Plan: {val.upper()} PLAN\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "‼️ i-Screenshot ito at i-send agad kay @JustTnnr ‼️\n"
+            "🎁 Pinoproseso na ang iyong activation token.\n\n"
             "Status: 🟡 PENDING ADMIN SETUP\n\n"
-            "Thank you for your purchase!\n💯 TRUSTED"
+            "Thank you for your purchase! 💯 TRUSTED"
         )
         bot.send_message(buyer_id, cf_msg)
 
-    bot.send_message(LOGS_GROUP_ID, f"🔔 **Stars Audit Log:** User @{buyer_uname} paid {payment_info.total_amount} Stars for {prod.upper()} package configurations.")
+    try:
+        bot.send_message(LOGS_GROUP_ID, f"🔔 **Stars Audit Log:** User @{buyer_uname} paid {payment_info.total_amount} Stars for {prod.upper()} package configurations.")
+    except Exception as e:
+        print(f"Audit Log Error: {e}")
 
 # ---------------------------------------------------------------------------
 # 8. MULTI-STEP SUBMISSION FLOW HANDLERS (REVIEWS & PAYMENT SCREENSHOT LOGIC)
@@ -1470,7 +1508,6 @@ def trigger_album_verification_pipeline(message, media_group_id=None, single_pho
 
     target_group = GARAGE_LOGS_GROUP_ID if "GAR_CAR_" in prod_raw else LOGS_GROUP_ID
     
-    # Send payment receipts album to Admin logs channel
     media_group_payload = []
     for idx, f_id in enumerate(photos_to_process):
         if idx == 0:
@@ -1481,7 +1518,6 @@ def trigger_album_verification_pipeline(message, media_group_id=None, single_pho
             
     bot.send_media_group(target_group, media_group_payload)
     
-    # --- FIXED CAR PICTURE LOG INCLUSION UNDER RECEIPT FOR ADMIN ---
     if product_img_to_send:
         try:
             if "," in product_img_to_send:
@@ -1753,7 +1789,6 @@ def process_car_photo(message):
         
         if mg_id not in album_cache:
             album_cache[mg_id] = []
-            # 2.5 seconds timer allows safe caching buffer for the engine to read the full album chunk
             t = threading.Timer(2.5, finalize_add_car_database_collage, args=[message, mg_id])
             t.start()
             
@@ -1762,9 +1797,6 @@ def process_car_photo(message):
     else:
         finalize_add_car_database_collage(message, media_group_id=None, single_photo_list=[photo_file_id])
 
-# ---------------------------------------------------------------------------
-# 🌟 NEW CORE LOGIC: PHOTO COLLAGE GENERATION FUNCTION 
-# ---------------------------------------------------------------------------
 def finalize_add_car_database_collage(message, media_group_id=None, single_photo_list=None):
     user_id = message.from_user.id
     chat_id = message.chat.id
@@ -1781,16 +1813,13 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
     brand = user_states.get(f"addcar_brand_{user_id}")
     if not brand: return
 
-    # Processing update notification
     prog_msg = bot.send_message(chat_id, f"⏳ Syncing data cluster for {brand}... Merging image pipeline for seamless display...")
 
     collaged_photo_file_id = None
     photo_count = len(photos_to_process)
 
-    # COLLAGE LOGIC PIPELINE
     if photo_count > 1:
         try:
-            # 1. Download pictures inside memory structures
             downloaded_images = []
             for f_id in photos_to_process:
                 file_info = bot.get_file(f_id)
@@ -1799,7 +1828,6 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
                 pil_image = Image.open(image_bytes)
                 downloaded_images.append(pil_image)
 
-            # 2. Build consistent canvas aspect ratios
             target_width = 1200
             total_height = 0
             resized_images = []
@@ -1813,7 +1841,6 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
                 resized_images.append(resized_img)
                 total_height += target_height
 
-            # 3. Paste to blank background canvas
             final_collage = Image.new('RGB', (target_width, total_height), (0, 0, 0))
 
             current_y_offset = 0
@@ -1821,12 +1848,10 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
                 final_collage.paste(r_img, (0, current_y_offset))
                 current_y_offset += r_img.height
 
-            # 4. Stream back to optimized JPEG bytes format
             output_bytes = io.BytesIO()
             final_collage.save(output_bytes, format='JPEG', quality=85)
             output_bytes.seek(0)
 
-            # 5. Broadcast to channel and catch the unified file ID handle
             uploaded_collaged_msg = bot.send_photo(chat_id, output_bytes, caption=f"🛠 Car Profile: Combined data view for {brand}")
             collaged_photo_file_id = uploaded_collaged_msg.photo[-1].file_id
 
@@ -1837,7 +1862,6 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
     else:
         collaged_photo_file_id = photos_to_process[0]
 
-    # DATABASE COMMITS
     owner = user_states.get(f"addcar_owner_{user_id}")
     stars = user_states.get(f"addcar_stars_{user_id}")
     paypal = user_states.get(f"addcar_paypal_{user_id}")
@@ -1857,7 +1881,6 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
     conn.commit()
     conn.close()
 
-    # Flush variables from stack structures
     for k in [f"addcar_brand_{user_id}", f"addcar_owner_{user_id}", f"addcar_stars_{user_id}", f"addcar_paypal_{user_id}", f"addcar_paymaya_{user_id}", f"addcar_flow_active_{user_id}"]:
         user_states.pop(k, None)
 
@@ -1874,17 +1897,14 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
 def catch_all_photo_handler(message):
     user_id = message.from_user.id
     
-    # 1. Check kung nag-aadd ng Kotse si Admin
     if user_states.get(f"addcar_flow_active_{user_id}") == "WAITING_FOR_CAR_PHOTOS":
         process_car_photo(message)
         return
 
-    # 2. Check kung nagpapadala ng payment confirmation slip ang customer
     if f"pay_flow_{user_id}" in user_states:
         process_payment_proof_receipt(message)
         return
 
-    # 3. Check kung nasa step ng reviews upload
     if user_states.get(f"step_{user_id}") == "WAITING_FOR_PHOTO":
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
