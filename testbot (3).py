@@ -760,19 +760,30 @@ def handle_callbacks(call):
         }
         prompt_for_payment_screenshot(chat_id)
 
+    # =======================================================================
+    # 🌟 CRITICAL BUGFIX: CHUNKING ENGINE FOR 100+ INVENTORY ASSETS
+    # =======================================================================
     elif data in ["inv_view_reg", "inv_view_vip", "inv_view_garage"]:
         if user_id not in ADMINS: return
+        
         if data == "inv_view_garage":
             conn = sqlite3.connect('tnnr_shop.db')
             cursor = conn.cursor()
             cursor.execute("SELECT car_id, brand, owner, price_stars FROM garage_cars")
             rows = cursor.fetchall()
             conn.close()
+            
+            if not rows:
+                bot.send_message(chat_id, "🚘 No cars listed inside garage logs.")
+                return
+                
             out = "🚘🚘 TNNR GARAGE STOCK 🚘🚘\n\n"
             for r in rows:
                 out += f"ID: #{r[0]} | {r[1]} | Owner: {r[2]} | ⭐️ {r[3]}\n"
-            markup = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("⬅ BACK", callback_data="close_menu"))
-            bot.send_message(chat_id, out, reply_markup=markup)
+            
+            # Message chunker logic for garage logs
+            for i in range(0, len(out), 4000):
+                bot.send_message(chat_id, out[i:i+4000])
             return
             
         table = "regular_inventory" if data == "inv_view_reg" else "vip_inventory"
@@ -784,12 +795,18 @@ def handle_callbacks(call):
         rows = cursor.fetchall()
         conn.close()
         
+        if not rows:
+            bot.send_message(chat_id, f"📦 Inventory is currently empty for {p_name}.")
+            return
+            
         out = f"📦📦 {p_name} INVENTORY 📦📦\n\n"
         for r in rows:
             out += f"━━━━━━━━━━━━━━━━━━━━━\n{p_name} #{r[0]}\nEmail: {r[1]}\n"
         out += f"━━━━━━━━━━━━━━━━━━━━━\nTotal Stock: {len(rows)}\n━━━━━━━━━━━━━━━━━━━━━"
-        markup = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("⬅ BACK", callback_data="close_menu"))
-        bot.send_message(chat_id, out, reply_markup=markup)
+        
+        # Safe Chunking execution to prevent Telegram API crashes on 100+ items
+        for i in range(0, len(out), 4000):
+            bot.send_message(chat_id, out[i:i+4000])
 
     elif data.startswith("buy_regular_") or data.startswith("buy_vip_"):
         parts = data.split("_")
@@ -1049,8 +1066,8 @@ def handle_callbacks(call):
             bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=success_text, reply_markup=None)
             return
 
-        if "REGULAR ACCOUNTS" in prod_name.upper() or "VIP ACCOUNTS" in prod_name.upper() or "REGULAR CARS" in prod_name.upper():
-            p_type = "regular_inventory" if ("REGULAR" in prod_name.upper() or "CAR" in prod_name.upper()) else "vip_inventory"
+        if "REGULAR" in prod_name.upper() or "VIP" in prod_name.upper():
+            p_type = "regular_inventory" if "REGULAR" in prod_name.upper() else "vip_inventory"
             cursor.execute(f"SELECT account_id, account_email FROM {p_type} ORDER BY account_id ASC LIMIT ?", (qty,))
             items = cursor.fetchall()
             
@@ -1072,7 +1089,7 @@ def handle_callbacks(call):
             formatted_accs = "\n".join(allocated)
             deliv_msg = (
                 "✅ ORDER CONFIRMED & DELIVERED\n"
-                f"Product: {'REGULAR CARS' if ('REGULAR' in prod_name.upper() or 'CAR' in prod_name.upper()) else 'VIP ACCOUNTS'}\n"
+                f"Product: {'REGULAR ACCOUNTS' if 'REGULAR' in prod_name.upper() else 'VIP ACCOUNTS'}\n"
                 f"Quantity: {qty}\n\n"
                 f"Account Details:\n{formatted_accs}\n\n"
                 "Status: ✅ COMPLETED\n\n"
@@ -1373,7 +1390,10 @@ def handle_stars_success_payment(message):
             )
             bot.send_message(buyer_id, error_delivery_msg)
             
-            bot.send_message(LOGS_GROUP_ID, f"🚨 **CRITICAL CRASH PREVENTED:** Nagbayad si @{buyer_uname} ng Stars para sa {p_name} pero **OUT OF STOCK** ang DB! Manual delivery needed for Order #{order_id}.", reply_markup=admin_order_keyboard(order_id))
+            try:
+                bot.send_message(LOGS_GROUP_ID, f"🚨 **CRITICAL COOLDOWN SEAMLESS WORKAROUND:** Nagbayad si @{buyer_uname} ng Stars para sa {p_name} pero **OUT OF STOCK** ang DB! Manual delivery needed for Order #{order_id}.", reply_markup=admin_order_keyboard(order_id))
+            except Exception:
+                pass
             
     else:
         p_name = "DAILY COINFARM" if prod == "coinfarm" else "CHANGE EMAIL & PASSWORD"
@@ -1891,7 +1911,7 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
 
 
 # =======================================================================
-# 🌟 CATCH-ALL PHOTO MIDDLEWARE (DITO SINALO ANG MGA ALBUM CHUNKS)
+# 11. CATCH-ALL PHOTO MIDDLEWARE (DITO SINALO ANG MGA ALBUM CHUNKS)
 # =======================================================================
 @bot.message_handler(content_types=['photo'])
 def catch_all_photo_handler(message):
@@ -1916,7 +1936,7 @@ def catch_all_photo_handler(message):
         return
 
 # ---------------------------------------------------------------------------
-# 11. SYSTEM APPLICATION EXECUTION POINT
+# 12. SYSTEM APPLICATION EXECUTION POINT
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
     bot.infinity_polling(skip_pending=True)
