@@ -13,6 +13,14 @@ from PIL import Image  # THIS IS THE LIBRARY WE JUST INSTALLED VIA PIP
 API_TOKEN = '8710564963:AAEe2MT5aMjUz3bUoKKnb7250AqnGHYfDRw'  # Your Token
 bot = telebot.TeleBot(API_TOKEN)
 
+# Railway persistent database path
+# Mount your Railway Volume to /data so this file survives restarts/redeploys.
+DB_PATH = os.getenv("DB_PATH", "/data/tnnr_shop.db")
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+def get_db():
+    return sqlite3.connect(DB_PATH)
+
 OWNER_ID = 6531314640
 EXTRA_ADMIN = 8650959684
 ADMINS = [OWNER_ID, EXTRA_ADMIN]
@@ -40,7 +48,7 @@ album_cache = {}
 # 2. DATABASE INITIALIZATION
 # ---------------------------------------------------------------------------
 def init_db():
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     
     # Users table
@@ -161,7 +169,7 @@ init_db()
 # 3. HELPER METRICS & DATA ENGINE FUNCTIONS
 # ---------------------------------------------------------------------------
 def get_stock_count(table_name):
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
     count = cursor.fetchone()[0]
@@ -169,7 +177,7 @@ def get_stock_count(table_name):
     return count
 
 def get_restock_meta(product_type):
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT last_restock_date, last_restock_time FROM stock_metadata WHERE product_type=?", (product_type,))
     meta = cursor.fetchone()
@@ -177,7 +185,7 @@ def get_restock_meta(product_type):
     return meta if meta else ("N/A", "N/A")
 
 def register_user_if_new(user_id, username):
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
     if not cursor.fetchone():
@@ -190,7 +198,7 @@ def register_user_if_new(user_id, username):
 
 def process_auto_delivery(user_id, username, product_name, qty, payment_method, total_price_str):
     table = "regular_inventory" if "REGULAR" in product_name.upper() else "vip_inventory"
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     
     cursor.execute(f"SELECT account_id, account_email FROM {table} ORDER BY account_id ASC LIMIT ?", (qty,))
@@ -225,7 +233,7 @@ def process_auto_delivery(user_id, username, product_name, qty, payment_method, 
     return allocated_accounts
 
 def create_pending_order(user_id, username, product_name, qty, payment_method, total_price_str, proof_file_id=""):
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     now = datetime.now()
     cur_date = now.strftime("%m/%d/%Y")
@@ -525,7 +533,7 @@ def handle_callbacks(call):
 
     elif data in ["garage_window_shopping", "garage_wanna_buy"]:
         mode = "window" if data == "garage_window_shopping" else "buy"
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT brand, owner, price_stars, price_paypal, price_paymaya, photo_file_id, car_id FROM garage_cars ORDER BY car_id DESC")
         cars = cursor.fetchall()
@@ -578,7 +586,7 @@ def handle_callbacks(call):
 
     elif data.startswith("garbuy_confirm_"):
         car_id = int(data.split("_")[2])
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT brand, owner, price_stars, price_paypal, price_paymaya, photo_file_id FROM garage_cars WHERE car_id=?", (car_id,))
         car = cursor.fetchone()
@@ -622,7 +630,7 @@ def handle_callbacks(call):
 
     elif data.startswith("garcheckout_"):
         car_id = int(data.split("_")[1])
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT brand, owner, price_stars, price_paypal, price_paymaya FROM garage_cars WHERE car_id=?", (car_id,))
         car = cursor.fetchone()
@@ -660,7 +668,7 @@ def handle_callbacks(call):
     # --- GARAGE PAYMENT SELECTIONS ---
     elif data.startswith("garpay_stars_"):
         car_id = int(data.split("_")[2])
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT brand, price_stars FROM garage_cars WHERE car_id=?", (car_id,))
         car = cursor.fetchone()
@@ -688,7 +696,7 @@ def handle_callbacks(call):
 
     elif data.startswith("garpay_paypal_"):
         car_id = int(data.split("_")[2])
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT brand, price_paypal FROM garage_cars WHERE car_id=?", (car_id,))
         car = cursor.fetchone()
@@ -730,7 +738,7 @@ def handle_callbacks(call):
 
     elif data.startswith("garpay_paymaya_"):
         car_id = int(data.split("_")[2])
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT brand, price_paymaya FROM garage_cars WHERE car_id=?", (car_id,))
         car = cursor.fetchone()
@@ -764,7 +772,7 @@ def handle_callbacks(call):
         if user_id not in ADMINS: return
         
         if data == "inv_view_garage":
-            conn = sqlite3.connect('tnnr_shop.db')
+            conn = get_db()
             cursor = conn.cursor()
             cursor.execute("SELECT car_id, brand, owner, price_stars FROM garage_cars")
             rows = cursor.fetchall()
@@ -785,7 +793,7 @@ def handle_callbacks(call):
         table = "regular_inventory" if data == "inv_view_reg" else "vip_inventory"
         p_name = "REGULAR ACCOUNT" if data == "inv_view_reg" else "VIP ACCOUNT"
         
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute(f"SELECT account_id, account_email FROM {table}")
         rows = cursor.fetchall()
@@ -1027,7 +1035,7 @@ def handle_callbacks(call):
         if user_id not in ADMINS: return
         oid = int(data.split("_")[2])
         
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT user_id, username, product, quantity, payment_method, amount, payment_proof FROM orders WHERE order_id=?", (oid,))
         order = cursor.fetchone()
@@ -1144,7 +1152,7 @@ def handle_callbacks(call):
         if user_id not in ADMINS: return
         oid = int(data.split("_")[2])
         
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT user_id FROM orders WHERE order_id=?", (oid,))
         row = cursor.fetchone()
@@ -1205,7 +1213,7 @@ def handle_callbacks(call):
         p_msg = user_states.get(f"rev_msg_{user_id}", "No content.")
         p_file = user_states.get(f"rev_photo_{user_id}", "")
         
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         now = datetime.now()
         cursor.execute('''
@@ -1269,7 +1277,7 @@ def handle_stars_success_payment(message):
         parts = payload.split(":")
         car_id = int(parts[1])
 
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT brand, owner, photo_file_id FROM garage_cars WHERE car_id=?", (car_id,))
         car = cursor.fetchone()
@@ -1465,7 +1473,7 @@ def trigger_album_verification_pipeline(message, media_group_id=None, single_pho
 
     if "GAR_CAR_" in prod_raw:
         car_id = int(prod_raw.split("_")[-1])
-        conn = sqlite3.connect('tnnr_shop.db')
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT brand, owner, price_paypal, price_paymaya, photo_file_id FROM garage_cars WHERE car_id=?", (car_id,))
         car = cursor.fetchone()
@@ -1592,7 +1600,7 @@ def advance_to_review_msg(chat_id, user_id):
 # 9. RENDER EXTENSION FUNCTIONS FOR TABULAR/LIST VIEWS
 # ---------------------------------------------------------------------------
 def render_previews(chat_id):
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT date, username, user_id, product, rating, review_message, screenshot_path FROM reviews ORDER BY review_id DESC LIMIT 10")
@@ -1623,7 +1631,7 @@ def render_previews(chat_id):
             bot.send_message(chat_id, text)
 
 def render_my_orders(chat_id, user_id):
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT order_id, date, time, product, status FROM orders WHERE user_id=? ORDER BY order_id DESC", (user_id,))
     rows = cursor.fetchall()
@@ -1647,7 +1655,7 @@ def render_my_orders(chat_id, user_id):
     bot.send_message(chat_id, out)
 
 def render_purchase_history(chat_id, user_id):
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT date, time, product, payment_method, amount, status FROM orders WHERE user_id=? AND status='COMPLETED' ORDER BY order_id DESC", (user_id,))
     rows = cursor.fetchall()
@@ -1710,7 +1718,7 @@ def process_restock_payload(message, p_type, target_qty):
     lines = [line.strip() for line in message.text.split('\n') if line.strip()]
     table = "regular_inventory" if p_type == "REGULAR" else "vip_inventory"
     
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     
     now = datetime.now()
@@ -1891,7 +1899,7 @@ def finalize_add_car_database_collage(message, media_group_id=None, single_photo
     d_str = now.strftime("%m/%d/%Y")
     t_str = now.strftime("%I:%M %p")
 
-    conn = sqlite3.connect('tnnr_shop.db')
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO garage_cars (brand, owner, price_stars, price_paypal, price_paymaya, photo_file_id, date_added, time_added)
